@@ -3,8 +3,7 @@ clear all
 close all
 
 % random seed: 55 for rl, 66 for lu, 77 for ll
-sd = 77;
-
+sd = 55;
 if sd == 55
    name_str = 'rl';
 elseif sd == 66
@@ -26,7 +25,8 @@ load(data_path+'Dubin_Car_Data_For_Plotting_'+num2str(sd)+"_"+name_str)
 % We want any sampling points in T{N} to be driven inside Tp{N} in the next step.
 % use the last 2 zonotopes
 indices = 1:numNodes; 
-N_Sample_ex = 100;
+% [100,40] for 70 works
+N_Sample_ex = 60;
 N_Sample_uni = 40;
 
 
@@ -73,6 +73,82 @@ for N = 1:numNodes % indices
     save(data_path+"\\sampling\\states_sampled_uniform_z"+num2str(N)+"_rand"+num2str(sd)+"_"+name_str+".mat", 'cu', 'Ru', 'states_uni', 'c1', 'c2', 'G2');
     % save(data_path+"states_sampled_boundary_z"+num2str(N)+"_rand"+num2str(sd)+".mat", 'cu', 'Ru', 'states_bd', 'c1', 'c2', 'G2');
 end
+
+%% Sample states and Derive Optimal u corresponding to (16)
+% If independently used, uncomment N_sample and sampling part.
+
+
+figure;
+hold on
+
+
+Xu=cell(1,Nu);
+
+% randomly picking a BRS index
+% N=numNodes;%randi([1,numNodes]);
+
+for N = 1:numNodes% numNodes %indices %last step  %flip(1:numNodes)
+    
+    disp(N)
+    % plotting two consecative BRSs
+    % Initial Set of Lambda1 colored in green
+    plot(T{N},[1 2],'EdgeColor',[0.3,0.3,0.3],'FaceColor','g','FaceAlpha',0.05,'linewidth',2)
+
+    % target set or Lamba2 colored in blue 
+    % plot(T{N+1},[1 2],'EdgeColor',[0.3,0.3,0.3],'FaceColor','b','FaceAlpha',0.05,'linewidth',2)
+    
+    % scatter(states_gaus(1,:), states_gaus(2,:), 'b.')
+    % scatter(states_rad(1,:), states_rad(2,:), 'b.')
+    % scatter(states_ex(1,:), states_ex(2,:), 'b.')
+    % scatter(states_uni(1,:), states_uni(2,:), 'b.')
+    % scatter(states_bd(1,:), states_bd(2,:), 'b.')
+
+
+    % Driving randomly generated values of x in the BRS Lambda1 to the BRS Lambda2 using (16)
+    % N_Sample=1000;
+
+    
+    % % collect state x1 for the current time step and the optimal input u
+    % % for controller training
+    % current_state = zeros(3, N_Sample);
+    % optimal_control = zeros(2, N_Sample);
+     
+    
+    % for j=1:N_Sample
+    %     x1 = states_extreme(:,j); % randPoint(T{N},1);
+    %     % control value using (16)
+    %     % u_opt=Dubin_Car_Control(x1,Trajectory_input(:,N),Rum(:,N),Tp{N});
+    %     % control value using (16) for the quadratic version 1
+    %     u_opt=Dubin_Car_Control_Quadratic(x1,Trajectory_input(:,N),Rum(:,N),Tp{N});
+    %     x2=F_Dubin_Car(x1,u_opt);
+    %     X=[x1(1);x2(1)];
+    %     Y=[x1(2);x2(2)];
+    %     % plotting the trajectories from Lambda1 to Lambda2
+    %     plot(X,Y,'k','linewidth',1);
+    % 
+    % 
+    %     current_state(:,j) = x1;
+    %     optimal_control(:,j) = u_opt;
+    % 
+    %
+    % end
+    
+    xlabel('$x_{1}$','interpreter','latex')
+    ylabel('$x_{2}$','interpreter','latex')
+    set(gca,'fontsize',15)
+    set(gca,'ticklabelinterpreter','latex')
+
+    box on
+
+    % warning('Number of nodes is %d',numNodes)
+    
+
+    %save(data_path+"states_optu_sampled_z"+num2str(N)+".mat", 'current_state', 'optimal_control');
+
+end
+
+%figure;
+%scatter(optimal_control(1,:), optimal_control(2,:), 'filled', 'b')
 
 
 

@@ -14,7 +14,7 @@ close all
 % and a rectangular target set [Xtl,Xtu].
 
 % random seed: 55 for rl, 66 for lu, 77 for ll
-sd = 77;
+sd = 55;
 rng(sd)
 
 if sd == 55
@@ -138,7 +138,9 @@ T{numNodes+1}=zonotope(X(:,numNodes+1),diag(Rx(:,numNodes+1))); % The final reac
 % time step 0.01
 % er=[2e-4;2e-4;1e-3]; % This is a disturbance term added to the car dynamics
 % time step 0.05
-er=[1e-3;1e-3;5e-3];
+er=[1e-3;1e-3;5e-3]; % For 77, 66, 55
+% More conservative when compute backward reachable sets, time step 0.05
+% er = [3e-3;3e-3;1.5e-2]; % 77 is fine
 
 
 % In our computations, the neighborhoods of state/input nominal pairs 

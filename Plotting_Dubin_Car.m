@@ -5,7 +5,7 @@ figure
 
 % random seed: 55 for rl, 66 for lu, 77 for ll
 
-sd = 77;
+sd = 55;
 
 if sd == 55
    name_str = 'rl';

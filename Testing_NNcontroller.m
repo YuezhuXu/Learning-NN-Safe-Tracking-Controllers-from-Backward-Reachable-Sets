@@ -1,4 +1,4 @@
-clear
+clear all
 clc
 close all
 
@@ -16,12 +16,21 @@ elseif sd == 77
 end
 
 
-rng(456)
+rng(777)
 
 load(data_path+"Dubin_Car_Data_For_Plotting_"+num2str(sd)+"_"+name_str)
 load(data_path+"Trajectory_Dubin_Car_"+num2str(sd)+"_"+name_str)
 
-figure
+
+starting_step = 1;
+
+
+%% 
+if ~exist('figures', 'dir')
+    mkdir('figures');
+end
+
+fig = figure;
 hold on
 Xt=zonotope([0.5*(Xtl+Xtu),diag(0.5*(Xtu-Xtl))]);
 plot(Xt,[1 2],'g','linewidth',2)
@@ -49,11 +58,9 @@ plot(Xs,[1 2],'k','linewidth',2)
 
 for ind=1:numNodes+1  %numNodes+1:-1:1
 plot(T{ind},[1 2],'EdgeColor',[0.3,0.3,0.3],'FaceColor',[0.5,0.5,0.5],'FaceAlpha',0.05,'linewidth',1)
-%plot(T{ind},[1 2],'EdgeColor','none','FaceColor',[0.5,0.5,0.5],'FaceAlpha',0.2)
 
 hold on
 end
-%plot(T{ind},[1 2],'EdgeColor',[0.3,0.3,0.3],'FaceColor',[0.5,0.5,0.5],'FaceAlpha',0.5)
 
 % Texts
 text(mean(Xtl(1))+0.75, mean(Xtl(2))+0.25, 'Target', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
@@ -67,7 +74,15 @@ G1 = T{1}.generators; % Generator matrix of the zonotope
 
 
 % Change the text position if needed
-text(c1(1)+0.5, c1(2)-0.35, 'Start', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', 'FontSize', 12, 'Interpreter', 'latex');
+% 55, 66: c1(2)+0.1,77: c1(2)-0.5
+if sd == 77
+    text_pos = -0.5;
+else
+    text_pos = 0.1;
+
+end
+
+text(c1(1)+0.5, c1(2)+text_pos, 'Start', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', 'FontSize', 12, 'Interpreter', 'latex');
 
 xlabel('$x_{1}$','interpreter','latex')
 ylabel('$x_{2}$','interpreter','latex')
@@ -79,64 +94,61 @@ grid on
 box on
 
 
-
-
-
-numNodes
-
+%%
+% current_model_epoch = 0;
 
 % disturbance radius
-er=[1e-3;1e-3;5e-3];
-starting_step = 1;
+er=[3e-3;3e-3;1.5e-2];
+
+numNodes
 
 % In terms of time step, Tp{N} <--> T{N+1}
 % We want any sampling points in T{N} to be driven inside Tp{N} in the next step.
 % Because matlab indices start from 1, all input indices are added by 1.
-% At time step 0: sample in Tp{1}, drive towards T{1}. 
+% At time step 0: sample in T{1}, drive towards Tp{1}. 
 % Nominal input is trajectory_input(:,1) and the trained neural controller
 % is model_params_step_1_randxxx_xx.mat
 
 % We first generate test sets: uniform, outside, benchmark
 N_Sample_test_uni = 100;
 
-% Sampling uniformly
+% Sampling uniformly (regular)
 initial_states_uni = randPoint(T{starting_step}, N_Sample_test_uni, "uniform");%+[0.02;0.02;0.02];
+
+%% 
+% From outside the initial zonotope
+N_Sample_test_out = 1000;
+
+
+% Directly sample from enlarged zonotope uniformly.
+c1 = center(T{starting_step});
+G1 = T{starting_step}.generators;
+
+
+% We try different level of points being pushed outside the zonotope
+tau = 0.5; % Small perturbation to push points outside
+if tau == 0.1
+    clr = 'red';
+elseif tau == 0.2
+    clr = 'cyan';
+elseif tau == 0.3
+    clr = 'blue';
+elseif tau == 0.5
+    clr = '#A52A2A';
+end
+    
+Z_enlarged = zonotope(c1, (1 + tau)*G1);
+initial_states_out = randPoint(Z_enlarged, N_Sample_test_out, "uniform");
+
+
+%%
 % Benchmark starting point
 initial_states_ben = [1;0.8;0];
 
-N_Sample_test_out = 100;
-epsilon = 0.03; % Small perturbation to push points outside
-c_proj = c1(1:2);              % Project the center onto dimensions 1 and 2
-G_proj = G1(1:2, :);            % Project the generators onto dimensions 1 and 2
-Z_proj = zonotope(c_proj, G_proj); % Create a 2D zonotope object
-boundary_points = polygon(Z_proj); 
-
-initial_states_out = zeros(size(G1, 1), N_Sample_test_out);
-
-% Solve for each boundary point
-for i = 1:N_Sample_test_out
-    % Boundary point in 2D
-    b_proj = boundary_points(:, i) - c_proj;
-    
-    % Optimization setup for r
-    H = eye(size(G_proj, 2));  % Quadratic term (minimizing ||r||_2)
-    f = zeros(size(G_proj, 2), 1);  % Linear term
-    Aeq = G_proj;               % Equality constraint (projected generators)
-    beq = b_proj;               % Target projected point
-    lb = -ones(size(G_proj, 2), 1); % Lower bounds for r
-    ub = ones(size(G_proj, 2), 1);  % Upper bounds for r
-    
-    % Solve using quadprog
-    r = quadprog(H, f, [], [], Aeq, beq, lb, ub);
-    % Reconstruct the original high-dimensional point
-    initial_states_out(:, i) = c1 + (1+epsilon)*G1 * r;
-    
-end
 
 %%
 % Run simulations
 % Choose from uni, out, ben
-% Reuse the module if two cases are ploted on one graph
 sim_case = 'uni';
 
 if strcmp(sim_case, 'uni')
@@ -150,7 +162,6 @@ elseif strcmp(sim_case,'out')
     end
     N_Sample_test = N_Sample_test_out;
     initial_states = initial_states_out;
-    clr = 'r';
 elseif strcmp(sim_case, 'ben')
     if  ~strcmp(name_str,'ll')
         error('Wrong case! Check the starting point.');
@@ -161,32 +172,35 @@ elseif strcmp(sim_case, 'ben')
 end
 
 
-
 tic;
 count_hitob = 0;
 success = 0;
 count_inpout = 0;
 
-
-
+%%
+us_NN = [];
+zs_NN = [];
 for i = 1:N_Sample_test
     i
     flag = 0;
     % Record the state in all time steps
     traj = zeros(size(initial_states,1),numNodes);
     state_curr = initial_states(:,i); 
-    plot(state_curr(1), state_curr(2),'o', 'MarkerSize', 2, 'MarkerEdgeColor', clr, 'MarkerFaceColor', clr);
+    % plot(state_curr(1), state_curr(2),'o', 'MarkerSize', 2, 'MarkerEdgeColor', clr, 'MarkerFaceColor', clr);
      
     traj(:,1) = state_curr; 
+    
 
-    for N = starting_step:numNodes
-        params_NN = load("optbased_ubounded\\trained_controller_rcac\\model_params_step"+num2str(N)+"_rand"+num2str(sd)+"_"+ name_str+".mat");
+    for N = starting_step:numNodes-1
+        params_NN = load("optbased_ubounded\\trained_controller_each_step\\model_params_step"+num2str(N)+"_rand"+num2str(sd)+"_"+ name_str+".mat");
+        % disp(params_NN.Ru)
         c1 = center(T{N});
         cu = Trajectory_input(:, N);
         Ru = Rum(:, N);
-        u_NN = input_NN(c1, cu, Ru, state_curr, params_NN);
-    
 
+        z_NN = middle_layers(c1,cu,state_curr, params_NN);
+        u_NN = input_NN(c1, cu, Ru, state_curr, params_NN);
+       
         % Clipping
         u_NN(1) = max(min(u_NN(1), 0.4), -0.4);
         u_NN(2) = max(min(u_NN(2), 0.25), -0.25);
@@ -200,50 +214,106 @@ for i = 1:N_Sample_test
             u_NN
         end
 
-
+        zs_NN = [zs_NN z_NN];
+        us_NN = [us_NN u_NN];
+        
         % Dubin_Car_Control_Quadratic(state_curr,cu,Ru,Tp{N});
-        % add disturbances in [-er, er]
+        % add disturbances in of N(0, er)
         disturbance = (2 * er .* rand(3, 1)) - er;
         state_next = F_Dubin_Car(state_curr,u_NN)+disturbance;
-        % Check if it hits any obstacle
+
+        % For checking success. Check if it hits any obstacle
         if (contains(Xu{1}, state_next) || contains(Xu{2}, state_next)  || contains(Xu{3}, state_next))
             count_hitob = count_hitob + 1;
             flag = 1;
+            disp('Hit obstable.')
         end
-        
+
         % Check if it is outside the bound
         if ~(contains(Xs, state_next))
             flag = 1;
+            disp('Outside the bound')
         end
-        
+
 
         % For plotting
         X_NN=[state_curr(1);state_next(1)];
         Y_NN=[state_curr(2);state_next(2)];
-        % Use blue for starting points within Lambda0,
-        % red for starting
-        % points outside Lambda0
-        plot(X_NN,Y_NN,clr+"-",'linewidth',1);
+
+
+        linewidth = 1;
+        markersize = 2;
+        linestyle = '-';
+
+       
+        plot(X_NN, Y_NN, linestyle, 'Color', clr, 'LineWidth', linewidth);
         
 
         state_curr = state_next;
-
-        % Use blue for starting points within Lambda0,
-        % red for starting points outside Lambda0
-        plot(state_curr(1), state_curr(2),'o', 'MarkerSize', 2, 'MarkerEdgeColor', clr, 'MarkerFaceColor', clr);
+        
+        plot(state_curr(1), state_curr(2),'o', 'MarkerSize', 1.5, 'MarkerEdgeColor', clr, 'MarkerFaceColor', clr);
+        
+        
+        
         traj(:,N+1) = state_curr;
 
     end
 
+
+    % For checking success
     if flag == 0 && contains(Xt,state_curr)
         success = success+1;
     end
+    
 end
 time_used = toc
 
 success_rate = success/N_Sample_test
 
+if strcmp(sim_case,'out')
+    fig_name = ['trajectory_plot_' sim_case '_' num2str(10*tau) '_' name_str '.eps'];
+else 
+    fig_name = ['trajectory_plot_' sim_case '_' name_str '.eps'];
+end
 
+
+%%
+% Step 1: Create inset axes at bottom-left
+if strcmp(sim_case,'out')
+    inset_axes = axes('Position', [0.65 0.2 0.2 0.2]);
+    hold(inset_axes, 'on');
+    box(inset_axes, 'on');
+
+    % Step 2: Plot zonotope INTO the inset using 'Parent'
+    plot(T{starting_step}, [1 2], ...
+        'EdgeColor', 'k', ...
+        'FaceColor', [0.8 0.8 0.8], ...
+        'FaceAlpha', 0.5, ...
+        'Parent', inset_axes);  % <- ensures zonotope plots inside inset
+
+    % Step 3: Plot initial sampled states INTO the inset explicitly
+    plot(inset_axes, initial_states(1,:), initial_states(2,:), ...
+         '.', 'Color', clr, 'MarkerSize', 5);
+
+    % Step 4: Zoom range — check this matches your data!
+    c = center(T{starting_step});
+    xlim(inset_axes, [c(1)-0.3, c(1)+0.3]);
+    ylim(inset_axes, [c(2)-0.3, c(2)+0.3]);
+    % Step 5: Remove ticks/labels
+    set(inset_axes, 'XTick', [], 'YTick', [], ...
+                    'XColor', 'none', 'YColor', 'none');
+    % Step 6: Bring to front (optional)
+    uistack(inset_axes, 'top');
+
+
+    h_rect = rectangle('Position', [c(1)-0.4, c(2)-0.4, 0.8, 0.8], ...
+              'EdgeColor', 'k', 'LineStyle', '-', 'LineWidth', 1.2);
+
+    xlim([c(1)-0.4, c(1)+0.4]);
+    ylim([c(2)-0.4, c(2)+0.4]);
+end
+
+print(fig, fullfile('optbased_ubounded/figures', fig_name), '-depsc', '-opengl');
 
 
 %%
@@ -266,12 +336,17 @@ function u = input_NN(c1, cu, Ru, x, params_NN)
     % Link-back layer (fclinkback) with element-wise multiplication
     z = (x-c1) .* (params_NN.fclinkback_weight * z + params_NN.fclinkback_bias');
     
-    % Final output layer (fcout) with ReLU activation, then sigmoid
-    z = relu(params_NN.fcout_weight * z + params_NN.fcout_bias');
-    % z = sigmoid(z);  % Apply sigmoid to bring z within [0, 1]
-    z = tanh(z);
+    % Final output layer (fcout) with ReLU activation, then tanh
+    % Should be no bias and we remove the relu
+    % z = relu(params_NN.fcout_weight * z + params_NN.fcout_bias');
 
-    Ru_trained = params_NN.Ru';
+    z = params_NN.fcout_weight * z; %relu(params_NN.fcout_weight * z);
+    z = tanh(z); % [-1,1]
+    
+    % disp(params_NN.Rusc)
+    % disp(Ru)
+    Ru_trained = params_NN.Ru'; %2*1
+    % Ru_trained = params_NN.Rusc' .* Ru;
     % Scale the output to the range [cu - Ru, cu + Ru]
     % u = (cu - Ru_trained) + 2 * Ru_trained .* z;
     u = cu + Ru_trained .* z;
@@ -284,6 +359,35 @@ function u = input_NN(c1, cu, Ru, x, params_NN)
     % u = min(max(u, lower_bound), upper_bound);  % Clamp u within bounds
     
 end
+
+function z = middle_layers(c1, cu, x, params_NN)
+    % Normalize the input with respect to c1
+    z = x - c1;
+    
+    % Layer 1: fc1
+    z = relu(params_NN.fc1_weight * z + params_NN.fc1_bias');
+    
+    % Layer 2: fc2
+    z = relu(params_NN.fc2_weight * z + params_NN.fc2_bias');
+    
+    % Layer 3: fc3
+    z = relu(params_NN.fc3_weight * z + params_NN.fc3_bias');
+    
+    % Layer 4: fc4
+    z = relu(params_NN.fc4_weight * z + params_NN.fc4_bias');  
+    
+    z = params_NN.fclinkback_weight * z + params_NN.fclinkback_bias';
+
+    % Link-back layer (fclinkback) with element-wise multiplication
+    z = (x-c1) .* z;
+    
+    z = params_NN.fcout_weight * z; %relu(params_NN.fcout_weight * z);
+    
+    % z = tanh(z); % [-1,1]
+    
+end
+
+
 
 
 

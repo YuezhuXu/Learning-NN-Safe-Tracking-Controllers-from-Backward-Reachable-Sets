@@ -10,7 +10,7 @@ close all
 
 data_path = "optbased_ubounded/";
 % random seed: 55 for rl, 66 for lu, 77 for ll
-sd = 77; 
+sd = 55; 
 rng(sd)
 
 
@@ -36,7 +36,7 @@ Nv=N_iter*(1+N_extend);
 
 
 % robustness margins
-delta_vector=[0.1;0.1;pi/10];
+delta_vector=[0.24;0.24;pi/9];
 % delta_vector=[0.15;0.15;pi/8];
 
 
