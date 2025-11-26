@@ -3,15 +3,15 @@ clear all
 close all
 figure
 
-% random seed: 55 for rl, 66 for lu, 77 for ll
+% random seed: 333 for rl, 222 for lu, 111 for ll
 
-sd = 55;
+sd = 111;
 
-if sd == 55
+if sd == 333
    name_str = 'rl';
-elseif sd == 66
+elseif sd == 222
    name_str = 'lu';
-elseif sd == 77
+elseif sd == 111
    name_str = 'll';
 end
 

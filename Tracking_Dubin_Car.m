@@ -8,20 +8,20 @@ close all
 
 % load the following file (Trajectory_Dubin_CarA.mat). 
 
-% The  map has a rectngular safe set given by the set [Xsl,Xsu],
+% The map has a rectngular safe set given by the set [Xsl,Xsu],
 % rectangular unsafe sets of the form [Xul,Xuu], where Xul and Xuu
 % are the columns of the arrays XulArray and XuuArray, respectively,
 % and a rectangular target set [Xtl,Xtu].
 
-% random seed: 55 for rl, 66 for lu, 77 for ll
-sd = 55;
+% random seed: 333 for rl, 222 for lu, 111 for ll
+sd = 111;
 rng(sd)
 
-if sd == 55
+if sd == 333
    name_str = 'rl';
-elseif sd == 66
+elseif sd == 222
    name_str = 'lu';
-elseif sd == 77
+elseif sd == 111
    name_str = 'll';
 end
 data_path = "optbased_ubounded/";
@@ -80,7 +80,6 @@ numNodes=Size_Input(2); % This is the number of input values used in constructin
 
 
 
-
 % For the backward reach set (BRS) computations, I need to have 
 %rectangular neighborhods of the nominal state/input pairs 
 % for two reasons,
@@ -100,7 +99,6 @@ Ru=zeros(m,numNodes);
 
 
 tic;
-
 % Computing the radii values
 alpha=0.99; 
 Rx(:,numNodes+1)=Dt-abs(X(:,numNodes+1)-Ct);
@@ -119,6 +117,64 @@ for i=numNodes:-1:1
 Ru(:,i)=D_input-abs(Trajectory_input(:,i)-C_input);
 end
 t_boxes=toc;
+
+
+% Computing the radii values (asymmetric), for safe sets in the verification
+margin = 0.01;
+
+% Initialize Rx_plus and Rx_minus
+Rx_plus = zeros(n, numNodes + 1);
+Rx_minus = zeros(n, numNodes + 1);
+
+% Terminal step
+Rx_plus(:, numNodes + 1) = max(0, Dt - max(0, X(:, numNodes + 1) - Ct));
+Rx_minus(:, numNodes + 1) = max(0, Dt - max(0, Ct - X(:, numNodes + 1)));
+
+for i = numNodes:-1:1
+    Distances_plus  = Inf(n, Nu + 1);
+    Distances_minus = Inf(n, Nu + 1);
+
+    % Operating region distances (safe region)
+    for j = 1:n
+        x_ij = X(j, i);
+        Distances_plus(j, Nu + 1)  = max(0, Cs(j) + Ds(j) - x_ij);  % right
+        Distances_minus(j, Nu + 1) = max(0, x_ij - (Cs(j) - Ds(j)));  % left
+    end
+
+    % Obstacle distances
+    for j = 1:Nu
+        [dist, ind] = inf_distance_with_index(X(:, i), CuArray(:, j), DuArray(:, j));
+        for d = 1:length(ind)
+            coord = ind(d);
+            x_val = X(coord, i);
+            c_val = CuArray(coord, j);
+            r_val = DuArray(coord, j);
+
+            lower_bound = c_val - r_val;
+            upper_bound = c_val + r_val;
+
+            if x_val < lower_bound
+                dist_plus = lower_bound - x_val - margin;
+                Distances_plus(coord, j) = dist_plus;
+            elseif x_val > upper_bound
+                dist_minus = x_val - upper_bound - margin;
+                Distances_minus(coord, j) = dist_minus;
+            else
+                Distances_plus(coord, j) = 0;
+                Distances_minus(coord, j) = 0;
+            end
+        end
+    end
+
+    % Final radii assignment
+    for j = 1:n
+        Rx_plus(j, i)  = min(Distances_plus(j, :));
+        Rx_minus(j, i) = min(Distances_minus(j, :));
+    end
+end
+
+
+
  
 
 
@@ -135,12 +191,9 @@ T{numNodes+1}=zonotope(X(:,numNodes+1),diag(Rx(:,numNodes+1))); % The final reac
 
 
 % State independent disturbance
-% time step 0.01
-% er=[2e-4;2e-4;1e-3]; % This is a disturbance term added to the car dynamics
 % time step 0.05
 er=[1e-3;1e-3;5e-3]; % For 77, 66, 55
-% More conservative when compute backward reachable sets, time step 0.05
-% er = [3e-3;3e-3;1.5e-2]; % 77 is fine
+
 
 
 % In our computations, the neighborhoods of state/input nominal pairs 
@@ -317,7 +370,7 @@ t_tracking=toc;
 
 
 % The data are plotted in the code Plotting_Dubin_Car
-save(data_path+"Dubin_Car_Data_For_Plotting_"+num2str(sd)+"_"+name_str+".mat","numNodes","Nu","Cs","Gs","Xsl","Xsu","X","Trajectory_input","Rx","Rum","Ct","Gt","CuArray","GuArray","T","Tp")
+save(data_path+"Dubin_Car_Data_For_Plotting_"+num2str(sd)+"_"+name_str+".mat","numNodes","Nu","Cs","Gs","Xsl","Xsu","X","Trajectory_input","Rx","Rx_minus","Rx_plus","Rum","Ct","Gt","CuArray","GuArray","T","Tp")
 
 
 

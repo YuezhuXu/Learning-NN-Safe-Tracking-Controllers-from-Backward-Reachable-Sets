@@ -9,16 +9,16 @@ clear all
 close all
 
 data_path = "optbased_ubounded/";
-% random seed: 55 for rl, 66 for lu, 77 for ll
-sd = 55; 
+% random seed: 333 for rl, 222 for lu, 111 for ll
+sd = 111; 
 rng(sd)
 
 
-if sd == 55
+if sd == 333
    name_str = 'rl';
-elseif sd == 66
+elseif sd == 222
    name_str = 'lu';
-elseif sd == 77
+elseif sd == 111
    name_str = 'll';
 end
 
@@ -55,12 +55,12 @@ Gs=diag(Ds);
 
 
 % Initial Condition
-if sd == 55
-   X0=[4;0.5;-pi/4]; % rl case, sd = 55
-elseif sd == 66
-   X0=[0.5;4.5;-pi/4]; % lu case, sd = 66
-elseif sd == 77
-   X0=[1;1;0]; % ll case, sd = 77
+if sd == 333
+   X0=[4;0.5;-pi/4]; % rl case
+elseif sd == 222
+   X0=[0.5;4.5;pi/4]; % lu case
+elseif sd == 111
+   X0=[1;1;0]; % ll case
 end
 
 
