@@ -1,12 +1,3 @@
-
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Oct 18 17:41:09 2024
-
-@author: 22384
-"""
-
-
 # We normalize states x to x-c1 (or x-xc) before it is input in the trainable feedforward part of NN 
 # Biases are kept (x-xc)*NN_{before sigmoid}
 
@@ -15,7 +6,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-#import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io
 import os
@@ -83,8 +73,6 @@ class CustomNN(nn.Module):
         
         # Store cu and Ru for transformation
         self.cu = cu
-        # self.Ru = initial_Ru
-        # Initialize Ru as a trainable parameter
         self.Ru = nn.Parameter(torch.zeros_like(initial_Ru))#torch.tensor(initial_Ru, dtype=torch.float32))  # initial_Ru is a 2x1 vector
         self.c1 = c1
         
@@ -96,8 +84,6 @@ class CustomNN(nn.Module):
         
 
     def forward(self, x):
-        # Clamping 
-        # self.Ru.data = torch.clamp(self.Ru.data, self.Ru_min, self.Ru_max)
         # Normalize the input before passing through the first layer
         x_normalized = x - self.c1  # Normalize with respect to c1
 
@@ -112,30 +98,16 @@ class CustomNN(nn.Module):
         # Multiply the input difference (x - c1) before applying sigmoid to the output
         x = x * x_normalized  # Multiply by (x - c1)
         
-        x= self.fcout(x) #torch.relu(self.fcout(x))
-        
-        '''
-        # Sigmoid to scale the output to the range [0, 1]
-        x = torch.softmax(x, dim = 1)
-        
-        # Transform output to the range [cu - Ru, cu + Ru]
-        u = (self.cu - self.Ru) + x * (2 * self.Ru)  # Scale and shift to [cu - Ru, cu + Ru]
-        '''
+        x= self.fcout(x) 
         
         # Tanh to scale the output to the range [-1, 1]
         x = torch.tanh(x)
-        # x = torch.relu(self.fcout(x))
-        # x = self.fcout(x)
+        
         
         
         # Transform output to the range [cu - Ru, cu + Ru]
         u = self.cu + x * self.Ru  # Scale and shift to [cu - Ru, cu + Ru]
-        '''
-        # Clamp u to the range [cu - Ru_initial, cu + Ru_initial]
-        lower_bound = self.cu - self.Ru
-        upper_bound = self.cu + self.Ru
-        u = torch.clamp(u, min=lower_bound, max=upper_bound)
-        '''
+        
         
         return u
 
@@ -150,14 +122,10 @@ def train_controller_for_step(ind, sd, ini_str, numNodes, device):
         
     
         data_ex = scipy.io.loadmat('sampling/states_sampled_extreme_z'+str(ind)+'_rand'+str(sd)+'_'+ini_str+'.mat')
-        #data_gaus = scipy.io.loadmat('states_sampled_gaussian_z'+str(ind)+'_rand'+str(sd)+'.mat')
-        #data_rad =  scipy.io.loadmat('states_sampled_radius_z'+str(ind)+'_rand'+str(sd)+'.mat')
         data_uni = scipy.io.loadmat('sampling/states_sampled_uniform_z'+str(ind)+'_rand'+str(sd)+'_'+ini_str+'.mat')
-        #data_bd = scipy.io.loadmat('states_sampled_boundary_z'+str(ind)+'_rand'+str(sd)+'.mat')
-        
+       
         # Same in all
         cu = torch.tensor(data_uni['cu'], dtype=torch.float32).flatten().to(device)
-        # What if makes the Ru trainable
         Ru = torch.tensor(data_uni['Ru'], dtype=torch.float32).flatten().to(device)
         c1 = torch.tensor(data_uni['c1'].flatten(), dtype=torch.float32).to(device)
         c2 = torch.tensor(data_uni['c2'].flatten(), dtype=torch.float32).to(device)
@@ -167,20 +135,11 @@ def train_controller_for_step(ind, sd, ini_str, numNodes, device):
         
         
         states_ex = data_ex['states_ex'].T  # Shape [x, 3]
-        # states_gaus = data_gaus['states_gaus'].T  # Shape [x, 3]
-        # states_rad = data_rad['states_rad'].T
-        states_uni = data_uni['states_uni'].T
-        #states_bd = data_bd['states_bd'].T
-        #states_gruni = np.concatenate((states_gaus, states_rad), axis=0)  
+        states_uni = data_uni['states_uni'].T 
         states_uniex = np.concatenate((states_uni, states_ex), axis=0)  
         
         
-        # Split data into training (70%) and test (30%) sets from the uniform set
-        # Add the extreme sampling to training set
-        # states_train_uni, states_test = train_test_split(states_uni, test_size=0.3, random_state=42)
-        #states_train = np.concatenate((states_ex, states_train_uni), axis=0)    
-        # states_test = states_rad
-        
+        # Split data into training (70%) and test (30%) sets from the uniform set        
         states_train, states_val = train_test_split(states_uniex, test_size=0.3)
     
         states_train_tensor = torch.tensor(states_train, dtype=torch.float32)  # [N, 3]
@@ -242,56 +201,14 @@ def train_controller_for_step(ind, sd, ini_str, numNodes, device):
                 # Apply the pseudoinverse inside the norm
                 residual_pinv = torch.matmul(G_pseudoinverse, residual.T).T  # G_pseudoinverse * residual
                 # G2 helps
-                # residual_pinv = residual
+
                 
                 infinity_norms = torch.norm(residual_pinv, p=float('inf'), dim=1)
                 
-                # Compute the squared norm for each residual, multiplied by the batch-specific coefficients
-                # loss = torch.mean(adaptive_coefficients * (torch.norm(residual_pinv, dim=1)**2))
-                # loss = torch.mean(adaptive_coefficients * (torch.norm(residual_pinv, dim=1, p = float('inf'))))
-                 
-                # Infinity norm works the best
-                # loss = torch.mean(torch.norm(residual_pinv, dim=1, p = float('inf')))
-                # loss = torch.mean(torch.exp(torch.norm(residual_pinv, dim=1, p=float('inf')) - 1))
-                # loss = torch.mean(torch.exp(torch.relu(infinity_norms - 1)))+torch.norm(net.Ru, p=2)
-                loss = torch.mean(torch.exp(torch.relu(infinity_norms - 1))) + 10 * torch.mean(infinity_norms) + 0.01 * torch.norm(net.Ru, p=1)
+                 loss = torch.mean(torch.exp(torch.relu(infinity_norms - 1))) + 10 * torch.mean(infinity_norms) + 0.01 * torch.norm(net.Ru, p=1)
     
                 
-                '''
-                # Consider adding additional penalty on the ones with >1 infinity norms
-                # Compute the infinity norm of each vector in `residual_pinv`
-                infinity_norms = torch.norm(residual_pinv, p=float('inf'), dim=1)
                 
-                # Calculate penalty for vectors exceeding the infinity norm constraint
-                penalty = torch.mean(torch.exp(torch.relu(infinity_norms - 1)))
-                
-                # Main loss (e.g., MSE or another primary loss function)
-                main_loss = torch.mean(infinity_norms)
-                
-                
-                # Combine main loss with constraint penalty
-                constraint_weight = 1  # Adjust this weight as needed
-                loss = main_loss + constraint_weight * penalty
-                '''
-                 
-                '''
-                # For barrier loss function
-                # Calculate the infinity norm for each vector in residual_pinv
-                inf_norm_residuals = torch.max(torch.abs(residual_pinv), dim=1).values  # Shape: [420]
-                
-                # Ensure values stay below 1 by clamping, and apply the barrier function
-                # Clamping keeps the values slightly below 1 to avoid NaN in the log calculation
-                inf_norm_residuals_clamped = torch.clamp(inf_norm_residuals, max=0.99)
-                barrier_loss = torch.log(1 - inf_norm_residuals_clamped)  # Barrier term
-    
-                # Add a high penalty for any vector whose infinity norm exceeds 1
-                penalty = 1000 * torch.relu(inf_norm_residuals - 1)  # Penalty for norm >= 1
-                
-                # Combine barrier loss and penalty, weighted by adaptive_coefficients
-                # loss = torch.mean(adaptive_coefficients * barrier_loss + penalty)
-                loss = torch.mean(barrier_loss + penalty)
-                '''
-    
     
      
                 # Backpropagation and optimization step
@@ -352,7 +269,7 @@ if __name__ == "__main__":
 
 
 
-    device = "cpu" #torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         
     # Get data from saved .mat file
